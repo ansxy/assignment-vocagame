@@ -80,7 +80,7 @@ const makeMockWallet = (opts: MockWalletOpts = {}) => ({
 let mockUserRepository: jest.Mocked<Pick<UserRepository, 'findOne' | 'findOneWithItems'>>;
 let mockWalletRepository: jest.Mocked<Pick<WalletsRepository, 'findOne' | 'findOneOrFail' | 'create'>>;
 let mockWalletLedgerRepository: jest.Mocked<
-    Pick<WalletLedgerRepository, 'findOne' | 'createTopUpEntry' | 'createTransferEntries'>
+    Pick<WalletLedgerRepository, 'findAll' | 'createTopUpEntry' | 'createTransferEntries'>
 >;
 
 let service: WalletService;
@@ -103,7 +103,7 @@ beforeEach(() => {
     } as any;
 
     mockWalletLedgerRepository = {
-        findOne:               jest.fn().mockResolvedValue(null), // no prior ledger by default
+        findAll:               jest.fn().mockResolvedValue([]), // no prior ledger by default
         createTopUpEntry:      jest.fn().mockResolvedValue({}),
         createTransferEntries: jest.fn().mockResolvedValue([{}, {}])
     } as any;
@@ -154,7 +154,9 @@ describe('addFundsToWallet', () => {
         mockWalletRepository.findOneOrFail.mockResolvedValue(wallet as any);
 
         // Ledger says balance_after is 500, but wallet.balance is 1000 → out of sync
-        mockWalletLedgerRepository.findOne.mockResolvedValue({ balance_after: 500 } as any);
+        mockWalletLedgerRepository.findAll.mockResolvedValue([
+            { balance_before: 0, amount: 500, balance_after: 500 }
+        ] as any);
 
         await expect(
             service.addFundsToWallet(USER_ID, WALLET_ID, 100, IDEM_KEY)
@@ -165,7 +167,7 @@ describe('addFundsToWallet', () => {
         const wallet = makeMockWallet({ id: WALLET_ID, userId: USER_ID, balance: 1000 });
         mockWalletRepository.findOneOrFail.mockResolvedValue(wallet as any);
         // No prior ledger — sync check passes
-        mockWalletLedgerRepository.findOne.mockResolvedValue(null);
+        mockWalletLedgerRepository.findAll.mockResolvedValue([]);
 
         await service.addFundsToWallet(USER_ID, WALLET_ID, 200, IDEM_KEY);
 
@@ -183,6 +185,32 @@ describe('addFundsToWallet', () => {
         );
     });
 
+    it('rounds top-up amount to two decimals (12.345 -> 12.35)', async () => {
+        const wallet = makeMockWallet({ id: WALLET_ID, userId: USER_ID, balance: 1000 });
+        mockWalletRepository.findOneOrFail.mockResolvedValue(wallet as any);
+
+        await service.addFundsToWallet(USER_ID, WALLET_ID, 12.345, IDEM_KEY);
+
+        expect(wallet.balance).toBe(1012.35);
+        expect(mockWalletLedgerRepository.createTopUpEntry).toHaveBeenCalledWith(
+            expect.objectContaining({ amount: 12.35, balanceAfter: 1012.35 }),
+            MOCK_TRANSACTION
+        );
+    });
+
+    it('throws when wallet is suspended', async () => {
+        const wallet = makeMockWallet({
+            id: WALLET_ID,
+            userId: USER_ID,
+            balance: 1000,
+            status: WalletStatus.SUSPENDED
+        });
+        mockWalletRepository.findOneOrFail.mockResolvedValue(wallet as any);
+
+        await expect(service.addFundsToWallet(USER_ID, WALLET_ID, 100, IDEM_KEY))
+            .rejects.toThrow(ERROR_MESSAGE.WALLET_SUSPENDED);
+    });
+
     it('wraps the work inside runIdempotent with the correct scope', async () => {
         const wallet = makeMockWallet({ id: WALLET_ID, userId: USER_ID, balance: 0 });
         mockWalletRepository.findOneOrFail.mockResolvedValue(wallet as any);
@@ -192,7 +220,8 @@ describe('addFundsToWallet', () => {
         expect(runIdempotent).toHaveBeenCalledWith(
             `wallet:add-funds:${WALLET_ID}`,
             IDEM_KEY,
-            expect.any(Function)
+            expect.any(Function),
+            { onDuplicate: 'ignore' }
         );
     });
 });
@@ -248,6 +277,18 @@ describe('transferFunds', () => {
         ).rejects.toThrow(ERROR_MESSAGE.CURRENCY_MISMATCH);
     });
 
+    it('throws when either sender or recipient wallet is suspended', async () => {
+        const sender    = makeMockWallet({ id: SENDER_ID,    currency: 'IDR', balance: 500, status: WalletStatus.SUSPENDED });
+        const recipient = makeMockWallet({ id: RECIPIENT_ID, currency: 'IDR', balance: 200 });
+
+        mockWalletRepository.findOneOrFail
+            .mockResolvedValueOnce(sender    as any)
+            .mockResolvedValueOnce(recipient as any);
+
+        await expect(service.transferFunds(basePayload(), IDEM_KEY))
+            .rejects.toThrow(ERROR_MESSAGE.WALLET_SUSPENDED);
+    });
+
     it('throws BadRequestError when sender has insufficient funds', async () => {
         const sender    = makeMockWallet({ id: SENDER_ID,    currency: 'IDR', balance: 50 });
         const recipient = makeMockWallet({ id: RECIPIENT_ID, currency: 'IDR', balance: 200 });
@@ -270,9 +311,9 @@ describe('transferFunds', () => {
             .mockResolvedValueOnce(recipient as any);
 
         // Sender ledger says 999 ≠ 1000 → out of sync
-        mockWalletLedgerRepository.findOne
-            .mockResolvedValueOnce({ balance_after: 999 } as any)  // sender check
-            .mockResolvedValueOnce(null);                           // recipient check
+        mockWalletLedgerRepository.findAll
+            .mockResolvedValueOnce([{ balance_before: 0, amount: 999, balance_after: 999 }] as any) // sender check
+            .mockResolvedValueOnce([] as any);                                                          // recipient check
 
         await expect(
             service.transferFunds(basePayload(), IDEM_KEY)
@@ -288,9 +329,9 @@ describe('transferFunds', () => {
             .mockResolvedValueOnce(recipient as any);
 
         // Sender in sync, recipient not
-        mockWalletLedgerRepository.findOne
-            .mockResolvedValueOnce({ balance_after: 1000 } as any) // sender check — in sync
-            .mockResolvedValueOnce({ balance_after: 999  } as any); // recipient check — out of sync (200 ≠ 999)
+        mockWalletLedgerRepository.findAll
+            .mockResolvedValueOnce([{ balance_before: 0, amount: 1000, balance_after: 1000 }] as any) // sender check — in sync
+            .mockResolvedValueOnce([{ balance_before: 0, amount: 999, balance_after: 999 }] as any);   // recipient check — out of sync
 
         await expect(
             service.transferFunds(basePayload(), IDEM_KEY)
@@ -379,6 +420,75 @@ describe('transferFunds', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// transferFundsByUser
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('transferFundsByUser', () => {
+    const SENDER_USER_ID = 1;
+    const RECIPIENT_USER_ID = 2;
+    const IDEM_KEY = 'idem-user-transfer-1';
+
+    it('resolves both wallets by user and currency then delegates to transferFunds', async () => {
+        mockWalletRepository.findOne
+            .mockResolvedValueOnce({ id: 'sender-wallet-id' } as any)
+            .mockResolvedValueOnce({ id: 'recipient-wallet-id' } as any);
+
+        const transferFundsSpy = jest.spyOn(service, 'transferFunds').mockResolvedValue(undefined);
+
+        await service.transferFundsByUser(
+            {
+                senderUserId: SENDER_USER_ID,
+                recipientUserId: RECIPIENT_USER_ID,
+                currency: 'idr',
+                amount: 100
+            },
+            IDEM_KEY
+        );
+
+        expect(mockWalletRepository.findOne).toHaveBeenNthCalledWith(1, {
+            where: {
+                user_id: SENDER_USER_ID,
+                currency: 'IDR'
+            }
+        });
+
+        expect(mockWalletRepository.findOne).toHaveBeenNthCalledWith(2, {
+            where: {
+                user_id: RECIPIENT_USER_ID,
+                currency: 'IDR'
+            }
+        });
+
+        expect(transferFundsSpy).toHaveBeenCalledWith(
+            {
+                senderWalletId: 'sender-wallet-id',
+                recipientWalletId: 'recipient-wallet-id',
+                amount: 100
+            },
+            IDEM_KEY
+        );
+    });
+
+    it('throws when sender or recipient has no wallet in requested currency', async () => {
+        mockWalletRepository.findOne
+            .mockResolvedValueOnce({ id: 'sender-wallet-id' } as any)
+            .mockResolvedValueOnce(null);
+
+        await expect(
+            service.transferFundsByUser(
+                {
+                    senderUserId: SENDER_USER_ID,
+                    recipientUserId: RECIPIENT_USER_ID,
+                    currency: 'USD',
+                    amount: 50
+                },
+                IDEM_KEY
+            )
+        ).rejects.toThrow('Sender or recipient does not have wallet with requested currency');
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // pay
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -397,6 +507,11 @@ describe('pay', () => {
             .rejects.toThrow(ERROR_MESSAGE.INVALID_AMOUNT);
     });
 
+    it('rejects payment smaller than smallest currency unit (0.001)', async () => {
+        await expect(service.pay(USER_ID, WALLET_ID, 0.001, IDEM_KEY))
+            .rejects.toThrow(ERROR_MESSAGE.INVALID_AMOUNT);
+    });
+
     it('throws BadRequestError when wallet does not belong to the user', async () => {
         const wallet = makeMockWallet({ id: WALLET_ID, userId: 999 });
         mockWalletRepository.findOneOrFail.mockResolvedValue(wallet as any);
@@ -411,6 +526,14 @@ describe('pay', () => {
 
         await expect(service.pay(USER_ID, WALLET_ID, 100, IDEM_KEY))
             .rejects.toThrow(ERROR_MESSAGE.INSUFFICIENT_FUNDS);
+    });
+
+    it('throws when wallet is suspended', async () => {
+        const wallet = makeMockWallet({ id: WALLET_ID, userId: USER_ID, balance: 500, status: WalletStatus.SUSPENDED });
+        mockWalletRepository.findOneOrFail.mockResolvedValue(wallet as any);
+
+        await expect(service.pay(USER_ID, WALLET_ID, 100, IDEM_KEY))
+            .rejects.toThrow(ERROR_MESSAGE.WALLET_SUSPENDED);
     });
 
     it('deducts the balance and records a negative ledger entry on success', async () => {
@@ -449,11 +572,21 @@ describe('create', () => {
         mockUserRepository.findOneWithItems.mockResolvedValue({ id: 1, wallets: [] } as any);
         mockWalletRepository.create.mockResolvedValue({} as any);
 
-        await service.create(1, 'USD');
+        await service.create(1, 'usd');
 
         expect(mockWalletRepository.create).toHaveBeenCalledWith(
             expect.objectContaining({ user_id: 1, currency: 'USD', balance: 0 })
         );
+    });
+
+    it('rejects duplicate wallet currency per user (case-insensitive)', async () => {
+        mockUserRepository.findOneWithItems.mockResolvedValue({
+            id: 1,
+            wallets: [{ currency: 'IDR' }]
+        } as any);
+
+        await expect(service.create(1, 'idr'))
+            .rejects.toThrow('User already has a wallet with this currency');
     });
 });
 
