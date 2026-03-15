@@ -8,7 +8,18 @@ export const transferFundsSchema = Joi.object({
     body: Joi.object({
         sender_wallet_id:    Joi.string().uuid().required(),
         recipient_wallet_id: Joi.string().uuid().required(),
-        amount:              Joi.number().positive().precision(2).required()
+        amount:              Joi.number().positive().required()
+    }).required()
+});
+
+export const transferFundsByUserSchema = Joi.object({
+    params: Joi.object(),
+    query: Joi.object(),
+    body: Joi.object({
+        sender_user_id: Joi.number().integer().positive().required(),
+        recipient_user_id: Joi.number().integer().positive().required(),
+        currency: Joi.string().length(3).uppercase().required(),
+        amount: Joi.number().positive().required()
     }).required()
 });
 
@@ -29,7 +40,7 @@ export const addFundsSchema = Joi.object({
     query: Joi.object(),
     body: Joi.object({
         wallet_id: Joi.string().uuid().required(),
-        amount:    Joi.number().positive().precision(2).required()
+        amount:    Joi.number().positive().required()
     }).required()
 });
 
@@ -40,7 +51,7 @@ export const paySchema = Joi.object({
     query: Joi.object(),
     body: Joi.object({
         wallet_id: Joi.string().uuid().required(),
-        amount:    Joi.number().positive().precision(2).required()
+        amount:    Joi.number().positive().required()
     }).required()
 });
 

@@ -5,6 +5,7 @@ import { ERROR_MESSAGE } from '../constant/common';
 interface IdempotentOptions {
   processingTtlSeconds?: number;
   completedTtlSeconds?: number;
+  onDuplicate?: 'throw' | 'ignore';
 }
 
 export const runIdempotent = async (
@@ -21,6 +22,7 @@ export const runIdempotent = async (
 
   const processingTtlSeconds = options.processingTtlSeconds ?? 120;
   const completedTtlSeconds = options.completedTtlSeconds ?? 24 * 60 * 60;
+  const onDuplicate = options.onDuplicate ?? 'throw';
 
   const lockKey = `idempotency:lock:${scope}:${normalizedKey}`;
   const doneKey = `idempotency:done:${scope}:${normalizedKey}`;
@@ -29,6 +31,10 @@ export const runIdempotent = async (
 
   const existingDone = await redis.get(doneKey);
   if (existingDone) {
+    if (onDuplicate === 'ignore') {
+      return;
+    }
+
     throw new BadRequestError(ERROR_MESSAGE.DUPLICATE_REQUEST);
   }
 

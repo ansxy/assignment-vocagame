@@ -11,3 +11,10 @@ export interface transferFundsDTO {
     senderWalletId: string;
     amount: number;
 }
+
+export interface transferFundsByUserDTO {
+    senderUserId: number;
+    recipientUserId: number;
+    currency: string;
+    amount: number;
+}

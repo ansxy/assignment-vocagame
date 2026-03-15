@@ -6,6 +6,7 @@ import { WalletStatus } from '../../database/models/wallet.model';
 import { HttpError } from '../shared/errors/http-error';
 import {
     transferFundsSchema,
+    transferFundsByUserSchema,
     createWalletSchema,
     addFundsSchema,
     paySchema,
@@ -19,6 +20,12 @@ type TransferFundsRequest   = Request<any, any, {
     recipient_wallet_id: string;
     amount:              number;
 }>;
+type TransferFundsByUserRequest = Request<any, any, {
+    sender_user_id: number;
+    recipient_user_id: number;
+    currency: string;
+    amount: number;
+}>;
 type CreateWalletRequest    = Request<{ userId: string }, any, { currency: string }>;
 type UpdateStatusRequest    = Request<{ walletId: string }, any, { status: WalletStatus }>;
 type PayRequest             = Request<{ userId: string }, any, { wallet_id: string; amount: number }>;
@@ -28,6 +35,7 @@ export class WalletController extends BaseController {
         super();
 
         this.addRoute('post',   '/transfer',              this.transferFunds    as RequestHandler, [], transferFundsSchema);
+        this.addRoute('post',   '/transfer/by-user',      this.transferFundsByUser as RequestHandler, [], transferFundsByUserSchema);
         this.addRoute('post',   '/users/:userId/wallets', this.createWallet     as RequestHandler, [], createWalletSchema);
         this.addRoute('post',   '/users/:userId/topup',   this.addFundsToWallet as RequestHandler, [], addFundsSchema);
         this.addRoute('post',   '/users/:userId/pay',     this.pay              as RequestHandler, [], paySchema);
@@ -42,6 +50,27 @@ export class WalletController extends BaseController {
 
             await this.walletService.transferFunds(
                 { senderWalletId: sender_wallet_id, recipientWalletId: recipient_wallet_id, amount },
+                idempotencyKey
+            );
+
+            response.status(200).json({ message: 'Funds transferred successfully' });
+        } catch (error) {
+            next(error);
+        }
+    };
+
+    private transferFundsByUser = async (request: TransferFundsByUserRequest, response: Response, next: NextFunction) => {
+        try {
+            const { sender_user_id, recipient_user_id, currency, amount } = request.body;
+            const idempotencyKey = request.header('Idempotency-Key') ?? '';
+
+            await this.walletService.transferFundsByUser(
+                {
+                    senderUserId: sender_user_id,
+                    recipientUserId: recipient_user_id,
+                    currency,
+                    amount
+                },
                 idempotencyKey
             );
 

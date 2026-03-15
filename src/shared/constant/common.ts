@@ -42,6 +42,7 @@ export const ERROR_MESSAGE = {
     BALANCE_OUT_OF_SYNC: 'Wallet balance is out of sync with latest ledger entry',
     INSUFFICIENT_FUNDS: 'Insufficient funds',
     CURRENCY_MISMATCH: 'Currency mismatch between sender and recipient wallets',
+    WALLET_SUSPENDED: 'Wallet is suspended and cannot process this operation',
     INVALID_AMOUNT: 'Amount must be greater than zero',
     SAME_WALLET_TRANSFER: 'Sender and recipient wallets must be different',
     IDEMPOTENCY_KEY_REQUIRED: 'Idempotency-Key header is required',
