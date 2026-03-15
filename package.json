@@ -1,0 +1,53 @@
+{
+  "name": "node-ts-clean-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Node.js TypeScript API boilerplate with controller, service, and repository layers.",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/src/server.js",
+    "sequelize": "sequelize",
+    "db:migrate": "sequelize db:migrate",
+    "db:seed": "sequelize db:seed:all",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
+  },
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "roots": ["<rootDir>/src"],
+    "testMatch": ["**/__tests__/**/*.test.ts"],
+    "moduleNameMapper": {
+      "^../../database/models/(.*)$": "<rootDir>/database/models/$1"
+    },
+    "globals": {
+      "ts-jest": {
+        "tsconfig": {
+          "rootDir": "."
+        }
+      }
+    }
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "joi": "^18.0.2",
+    "pg": "^8.13.3",
+    "pg-hstore": "^2.3.4",
+    "redis": "^4.7.1",
+    "sequelize": "^6.37.5"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.1",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^22.13.10",
+    "jest": "^30.3.0",
+    "sequelize-cli": "^6.6.3",
+    "ts-jest": "^29.4.6",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.8.2"
+  }
+}
