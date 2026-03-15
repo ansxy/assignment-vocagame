@@ -1,0 +1,27 @@
+meta {
+  name: Top Up Wallet
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/wallets/users/:userId/topup
+  body: json
+  auth: none
+}
+
+params:path {
+  userId: 4
+}
+
+headers {
+  Content-Type: application/json
+  Idempotency-Key: topup-{{userId}}-001
+}
+
+body:json {
+  {
+    "wallet_id": "43292dfc-3e8d-4ae6-95be-b674bcc3975f",
+    "amount": 50
+  }
+}

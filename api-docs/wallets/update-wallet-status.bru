@@ -1,0 +1,21 @@
+meta {
+  name: Update Wallet Status
+  type: http
+  seq: 6
+}
+
+patch {
+  url: {{baseUrl}}/api/wallets/{{walletId}}/status
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "status": "suspended"
+  }
+}

@@ -1,0 +1,23 @@
+meta {
+  name: Pay (Deduct Funds)
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/wallets/users/{{userId}}/pay
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Idempotency-Key: pay-{{userId}}-001
+}
+
+body:json {
+  {
+    "wallet_id": "{{walletId}}",
+    "amount": 50000.00
+  }
+}
