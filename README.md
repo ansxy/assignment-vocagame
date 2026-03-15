@@ -187,6 +187,7 @@ The API will be available at `http://localhost:3000`.
 | `POST` | `/api/wallets/users/:userId/topup` | Top up wallet balance |
 | `POST` | `/api/wallets/users/:userId/pay` | Deduct funds from wallet |
 | `POST` | `/api/wallets/transfer` | Transfer funds between wallets |
+| `POST` | `/api/wallets/transfer/by-user` | Transfer using sender user, recipient user, and currency |
 | `PATCH` | `/api/wallets/:walletId/status` | Update wallet status (`active` / `suspended`) |
 
 #### Idempotency

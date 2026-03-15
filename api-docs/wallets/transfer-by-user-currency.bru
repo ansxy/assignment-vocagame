@@ -1,0 +1,25 @@
+meta {
+  name: Transfer By User + Currency
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/wallets/transfer/by-user
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Idempotency-Key: transfer-user-currency-001
+}
+
+body:json {
+  {
+    "sender_user_id": 1,
+    "recipient_user_id": 2,
+    "currency": "IDR",
+    "amount": 100000.00
+  }
+}
